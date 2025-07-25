@@ -17,6 +17,26 @@ startup
             timer.CurrentTimingMethod = TimingMethod.GameTime;
         }
     }
+
+    settings.Add("VelocityOutput", false, "Output Horizontal Velocity");
+    vars.SetTextComponent = (Action<string, string>)((id, text) =>
+	{
+	    var textSettings = timer.Layout.Components.Where(x => x.GetType().Name == "TextComponent").Select(x => x.GetType().GetProperty("Settings").GetValue(x, null));
+	    var textSetting = textSettings.FirstOrDefault(x => (x.GetType().GetProperty("Text1").GetValue(x, null) as string) == id);
+	    if (textSetting == null)
+	    {
+	        var textComponentAssembly = Assembly.LoadFrom("Components\\LiveSplit.Text.dll");
+	        var textComponent = Activator.CreateInstance(textComponentAssembly.GetType("LiveSplit.UI.Components.TextComponent"), timer);
+	        timer.Layout.LayoutComponents.Add(new LiveSplit.UI.Components.LayoutComponent("LiveSplit.Text.dll", textComponent as LiveSplit.UI.Components.IComponent));
+	
+	        textSetting = textComponent.GetType().GetProperty("Settings", BindingFlags.Instance | BindingFlags.Public).GetValue(textComponent, null);
+	        textSetting.GetType().GetProperty("Text1").SetValue(textSetting, id);
+	    }
+	
+	    if (textSetting != null) {
+            textSetting.GetType().GetProperty("Text2").SetValue(textSetting, text);
+        }
+    });
 }
 
 init
@@ -55,6 +75,9 @@ init
         new MemoryWatcher<int>(new DeepPointer(syncLoadCounter)) { Name = "syncLoadCount" },
         new MemoryWatcher<IntPtr>(new DeepPointer(localPlayer, 0x78, 0x80, 0x220)) { Name = "loadingWidget"},
         new MemoryWatcher<ulong>(new DeepPointer(localPlayer, 0x78, 0x78, 0x18)) { Name = "worldFName"},
+        new MemoryWatcher<double>(new DeepPointer(localPlayer, 0x30, 0x2E8, 0x328, 0xB8)) { Name = "xVel"},
+        new MemoryWatcher<double>(new DeepPointer(localPlayer, 0x30, 0x2E8, 0x328, 0xC0)) { Name = "yVel"},
+        //new MemoryWatcher<double>(new DeepPointer(localPlayer, 0x30, 0x2E8, 0x328, 0xC8)) { Name = "zVel"},
     };
 
     vars.Watchers.UpdateAll(game);
@@ -73,6 +96,14 @@ update
     var showingLoadingscreen = (vars.Watchers["loadingWidget"].Current != IntPtr.Zero) && current.world != "MainMenu";
     var isSyncLoading = vars.Watchers["syncLoadCount"].Current > 0;
     current.loading = isSyncLoading || showingLoadingscreen;
+
+    if(settings["VelocityOutput"]) {
+        var xVel = (double)vars.Watchers["xVel"].Current;
+        var yVel = (double)vars.Watchers["yVel"].Current;
+        //var zVel = (double)vars.Watchers["zVel"].Current;
+        double hVel = Math.Floor(Math.Sqrt(xVel * xVel + yVel * yVel) + 0.5f) / 100;
+        vars.SetTextComponent("Horizontal Velocity:", hVel.ToString());
+    }
 }
 
 isLoading
